@@ -13,72 +13,83 @@ class music_player(commands.Cog):
         self.is_playing = False
         self.is_paused = False
 
-        # 2d array containing [song, channel]
         self.music_queue = []
         self.YDL_OPTIONS = {'format': 'bestaudio/best'}
         self.FFMPEG_OPTIONS = {'options': '-vn'}
 
         self.vc = None
-        self.ytdl = YoutubeDL(self.YDL_OPTIONS)
 
-    def append_yt_link(self, item):
-        search = VideosSearch(item, limit=1)
+    def append_request(self, link, channel):
+        search = VideosSearch(link, limit=1)
         if search.result()["result"][0] == 0:
             return False
         else:
             self.music_queue.append({'source':search.result()["result"][0]["link"],
                                     'title':search.result()["result"][0]["title"],
-                                    'thumbnail':search.result()["result"][0]["thumbnails"][0]["url"]})
+                                    'vc': channel})
         return True
     
-    async def play_next(self):
-        if len(self.music_queue) > 0:
-            self.is_playing = True
-
-            #get the first url
-            m_url = self.music_queue[0][0]['source']
-
-            #remove the first element as you are currently playing it
-            self.music_queue.pop(0)
-            loop = asyncio.get_event_loop()
-            data = await loop.run_in_executor(None, lambda: self.ytdl.extract_info(m_url, download=False))
-            song = data['url']
-            self.vc.play(discord.FFmpegPCMAudio(song, executable= "ffmpeg.exe", **self.FFMPEG_OPTIONS), after=lambda e: asyncio.run_coroutine_threadsafe(self.play_next(), self.bot.loop))
-        else:
-            self.is_playing = False
-
+    def do_yt_search(self, ctx, arg):
+        search = VideosSearch(arg, limit=5)
+        if search.result()["result"][0] == 0:
+            return ""
+        else: # !!! Not implement
+            # do search and wait user select
+            return ""
+        
     @commands.command(name="play")
     async def play(self,ctx, arg):
-        # add link
-        if not self.append_yt_link(arg):
-            await ctx.send("```Failed to add {arg}```")
+        try:
+            voice_channel = ctx.author.voice.channel
+        except:
+            await ctx.send("```人？```")
             return
-        await ctx.send("`" + self.music_queue[-1]['title'] + "` was added to the queue")
-
+        
+        query = arg
+        yt_url = ""
+        
+        # perform yt search
+        if arg.startswith("https://"): 
+            yt_url = query
+        else:
+            # Let user choose
+            self.do_yt_search(ctx,query)
+        # append to list
+        if not self.append_request(yt_url,voice_channel):
+            await ctx.send("```Failed to add {yt_url}```")
+            return
+        await ctx.send("```" + self.music_queue[-1]['title'] + " was added to the queue```")
+        if self.is_playing:
+            return
+            # play
+        await self.play_music(ctx)
+    
+    async def play_music(self, ctx):
+        if len(self.music_queue) <= 0:
+            self.is_playing = False
+            return
+        self.is_playing = True
+        music = self.music_queue[0]
+        self.music_queue.pop(0)
         # join vc
         if self.vc == None or not self.vc.is_connected():
-            try:
-                voice_channel = ctx.author.voice.channel
-            except:
-                await ctx.send("```You need to connect to a voice channel first!```")
+            self.vc = await music['vc'].connect()
+            if self.vc == None: # Failed
+                await ctx.send("```Failed to join vc```")
                 return 
-            self.vc = await voice_channel.connect() # try join vc
-            if self.vc == None: # Failed to join
-                await ctx.send("```Could not connect to the voice channel```")
-                return 
-            
-        ## not yet implement !!!!!!!!!!!!!!!!!!!!!!!!!
-        if not self.is_playing:
-            pass
-        # else:
-        # # play
-        # data = self.ytdl.extract_info(m_url, download=False)
-        # song = data['url']
-        # self.vc.play(discord.FFmpegPCMAudio(song))
-    
-    
-# url of the video 
-
+        else:
+            await self.vc.move_to(music['vc'])
+        loop = asyncio.get_event_loop()
+        with YoutubeDL(self.YDL_OPTIONS) as ydl:
+            data = ydl.extract_info(music['source'], download=False)
+        song = data['url']
+        play_list = "Playing: -------- " + music['title'] + " --------\r\n"
+        count = 2
+        for it in self.music_queue:
+            play_list = play_list + str(count) + ". " + it['title'] + "\r\n"
+            count = count + 1
+        await ctx.send("```~Playlist~ \r\n" + play_list + "```")
+        self.vc.play(discord.FFmpegPCMAudio(song, executable= "ffmpeg.exe", **self.FFMPEG_OPTIONS), after=lambda e: asyncio.run_coroutine_threadsafe(self.play_music(ctx), self.bot.loop))
   
 # search = VideosSearch(url, limit=1)
 # if not search:
