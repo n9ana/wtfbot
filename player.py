@@ -130,6 +130,25 @@ class music_player(commands.Cog):
             #try to play next in the queue if it exists
             await self.play_music(interaction)
 
+    async def skip(self,interaction):
+        view = discord.ui.View(timeout = 30)
+        vc_ch = self.vc_list[hash(interaction.user.voice.channel)]
+        select_list = discord.ui.Select(
+            placeholder = "Skip to ...", # the placeholder text that will be displayed if nothing is selected
+            min_values = 1, # the minimum number of values that must be selected by the users
+            max_values = 1, # the maximum number of values that can be selected by the users
+            options = [ # the list of options from which users can choose, a required field
+            ]
+        )
+        count = 1
+        for it in vc_ch.music_queue:
+            msg = str(count) +". " + it['title']
+            count = count + 1
+            select_list.append_option(discord.SelectOption(label=msg))
+        select_list.callback = self.skip_selection_cb
+        view.add_item(select_list)
+        await interaction.channel.send("Select", view=view)
+
     # UI
     async def resume_button_cb(self, interaction: discord.Interaction):
         vc_ch = self.vc_list[hash(interaction.user.voice.channel)]
@@ -148,6 +167,15 @@ class music_player(commands.Cog):
         await interaction.response.edit_message(content = "Next song")
         await self.next(interaction)
 
+    async def skip2_button_cb(self, interaction: discord.Interaction):
+        await interaction.response.edit_message(content = "Skip song")
+        await self.skip(interaction)
+    
+    async def skip_selection_cb(self, interaction: discord.Interaction):
+        msg = "Skipping to "+interaction.data['values'][0]
+        await self.send_info(interaction.channel, msg,"")
+        await interaction.response.autocomplete()
+        
     async def ui(self,ctx):
         view = discord.ui.View(timeout = 600)
         resume_button = discord.ui.Button(
@@ -158,6 +186,10 @@ class music_player(commands.Cog):
             label = "Next",
             style = discord.ButtonStyle.blurple
         )
+        skip2_button = discord.ui.Button(
+            label = "Skip",
+            style = discord.ButtonStyle.grey
+        )
         clear_button = discord.ui.Button(
             label = "Clear",
             style = discord.ButtonStyle.red
@@ -166,8 +198,10 @@ class music_player(commands.Cog):
         resume_button.callback = self.resume_button_cb
         clear_button.callback = self.clear_button_cb
         next_button.callback = self.next_button_cb
+        skip2_button.callback = self.skip2_button_cb
         view.add_item(resume_button)
         view.add_item(next_button)
+        view.add_item(skip2_button)
         view.add_item(clear_button)
         await ctx.send("Control Panel", view=view)
     
