@@ -6,7 +6,7 @@ import asyncio
 # !!! pip install --force-reinstall 'httpx<0.28'
 
 class music_player(commands.Cog):
-    @commands.Cog.listener()
+    # @commands.Cog.listener()
     # async def on_interaction(self, interaction: discord.Interaction):
     #     print("1233")
     #     await interaction.respond(content="inin")
