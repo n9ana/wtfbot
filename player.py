@@ -42,7 +42,7 @@ class music_player(commands.Cog):
         try:
             voice_channel = ctx.author.voice.channel
         except:
-            await ctx.send("```人？```")
+            await self.send_error(ctx,"人？","Enter the voice channel first")
             return
         
         query = arg
@@ -56,41 +56,75 @@ class music_player(commands.Cog):
             self.do_yt_search(ctx,query)
         # append to list
         if not self.append_request(yt_url,voice_channel):
-            await ctx.send("```Failed to add {yt_url}```")
+            await self.send_error(ctx,"Failed to add {yt_url}","")
             return
-        await ctx.send("```" + self.music_queue[-1]['title'] + " was added to the queue```")
+        msg = "***" + self.music_queue[-1]['title'] + "***" + " was added to the queue"
+        await self.send_success(ctx,"Query success~",msg)
         if self.is_playing:
             return
             # play
         await self.play_music(ctx)
-    
+        
     async def play_music(self, ctx):
         if len(self.music_queue) <= 0:
             self.is_playing = False
             return
         self.is_playing = True
         music = self.music_queue[0]
-        self.music_queue.pop(0)
         # join vc
         if self.vc == None or not self.vc.is_connected():
             self.vc = await music['vc'].connect()
             if self.vc == None: # Failed
-                await ctx.send("```Failed to join vc```")
+                await self.send_error(ctx,"Failed to join vc","")
                 return 
         else:
             await self.vc.move_to(music['vc'])
+
+        # Display play list
+        await self.send_info(ctx,"Playlist",self.gen_playlist())
+
+        # Play music
         loop = asyncio.get_event_loop()
         with YoutubeDL(self.YDL_OPTIONS) as ydl:
             data = ydl.extract_info(music['source'], download=False)
         song = data['url']
-        play_list = "Playing: -------- " + music['title'] + " --------\r\n"
-        count = 2
-        for it in self.music_queue:
-            play_list = play_list + str(count) + ". " + it['title'] + "\r\n"
-            count = count + 1
-        await ctx.send("```~Playlist~ \r\n" + play_list + "```")
+        self.music_queue.pop(0)
         self.vc.play(discord.FFmpegPCMAudio(song, executable= "ffmpeg.exe", **self.FFMPEG_OPTIONS), after=lambda e: asyncio.run_coroutine_threadsafe(self.play_music(ctx), self.bot.loop))
-  
+    
+    def gen_playlist(self):
+        if len(self.music_queue) <= 0:
+            print("Unable to generate playlist, queue <= 0")
+        play_list = "**1. __"+ self.music_queue[0]['title'] + "__**\r\n"
+        count = 2
+        if len(self.music_queue) > 1:
+            for it in self.music_queue:
+                play_list = play_list + str(count) + ". " + it['title'] + "\r\n"
+                count = count + 1
+        return play_list
+    
+    async def send_info(self, ctx, t, d):
+        embed = discord.Embed(
+            title = t,
+            description = d,
+            color = discord.Color.blue()
+        )
+        await ctx.send(embed = embed)
+
+    async def send_error(self, ctx, t, d):
+        embed = discord.Embed(
+            title = t,
+            description = d,
+            color = discord.Color.red()
+        )
+        await ctx.send(embed = embed)
+
+    async def send_success(self, ctx, t, d):
+        embed = discord.Embed(
+            title = t,
+            description = d,
+            color = discord.Color.green()
+        )
+        await ctx.send(embed = embed)
 # search = VideosSearch(url, limit=1)
 # if not search:
 #     print("Search Failed")
