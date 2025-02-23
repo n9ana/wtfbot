@@ -7,9 +7,9 @@ import asyncio
 
 class music_player(commands.Cog):
     @commands.Cog.listener()
-    async def on_interaction(self, interaction: discord.Interaction):
-        print("1233")
-        await interaction.respond(content="inin")
+    # async def on_interaction(self, interaction: discord.Interaction):
+    #     print("1233")
+    #     await interaction.respond(content="inin")
 
     def __init__(self, bot):
         self.bot = bot
@@ -116,39 +116,50 @@ class music_player(commands.Cog):
         self.vc.resume()
         return True
     
+    async def next(self,ctx):
+        if self.vc != None and self.vc:
+            self.vc.stop()
+            #try to play next in the queue if it exists
+            await self.play_music(ctx)
     # UI
     async def resume_button_cb(self, interaction: discord.Interaction):
-        if self.resume():
+        if self.is_paused:
+            self.resume()
             await interaction.response.edit_message(content = "Resumed")
         else:
-            await interaction.response.edit_message(content = "?")
-    async def stop_button_cb(self, interaction: discord.Interaction):
-        if self.pause():
-            await interaction.response.edit_message(content = "Stoped")
-        else:
-            await interaction.response.edit_message(content = "?")
+            self.pause()
+            await interaction.response.edit_message(content = "Paused")
+
+    async def clear_button_cb(self, interaction: discord.Interaction):
+        self.music_queue = []
+        await interaction.response.edit_message(content = "Playlist cleared")
+
+    async def next_button_cb(self, interaction: discord.Interaction):
+        await interaction.response.edit_message(content = "Next song")
+        await self.next(interaction)
 
     async def ui(self,ctx):
-        view = discord.ui.View(timeout = 30)
+        view = discord.ui.View(timeout = 600)
         resume_button = discord.ui.Button(
             label = "Resume/Pause",
             style = discord.ButtonStyle.blurple
-        )
-        stop_button = discord.ui.Button(
-            label = "Stop",
-            style = discord.ButtonStyle.red
         )
         next_button = discord.ui.Button(
             label = "Next",
             style = discord.ButtonStyle.blurple
         )
+        clear_button = discord.ui.Button(
+            label = "Clear",
+            style = discord.ButtonStyle.red
+        )
+        
         resume_button.callback = self.resume_button_cb
-        stop_button.callback = self.stop_button_cb
-        next_button.callback = self.stop_button_cb
+        clear_button.callback = self.clear_button_cb
+        next_button.callback = self.next_button_cb
         view.add_item(resume_button)
-        view.add_item(stop_button)
         view.add_item(next_button)
-        await ctx.send("Control", view=view)
+        view.add_item(clear_button)
+        await ctx.send("Control Panel", view=view)
     
 
     def gen_playlist(self):
