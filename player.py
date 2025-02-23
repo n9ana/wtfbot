@@ -28,13 +28,15 @@ class music_player(commands.Cog):
         self.vc = None
 
     def append_request(self, link, channel):
-        search = VideosSearch(link, limit=1)
-        if search.result()["result"][0] == 0:
+        try:
+            with YoutubeDL(self.YDL_OPTIONS) as ydl:
+                data = ydl.extract_info(link, download=False)
+            title = data["title"]
+        except Exception:
             return False
-        else:
-            self.music_queue.append({'source':search.result()["result"][0]["link"],
-                                    'title':search.result()["result"][0]["title"],
-                                    'vc': channel})
+        self.music_queue.append({'source':link,
+                                'title':title,
+                                'vc': channel})
         return True
     
     def do_yt_search(self, ctx, arg):
