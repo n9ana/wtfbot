@@ -20,8 +20,11 @@ class music_player(commands.Cog):
 
         self.music_queue = []
         self.YDL_OPTIONS = {'format': 'bestaudio/best'}
-        self.FFMPEG_OPTIONS = {'options': '-vn'}
-
+        # Debug use
+        # self.YDL_OPTIONS = {'format': 'bestaudio/best',
+        #                     'verbose': True}
+        self.FFMPEG_OPTIONS = {'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
+                               'options': '-vn -filter:a "volume=0.25"'}
         self.vc = None
 
     def append_request(self, link, channel):
@@ -95,8 +98,8 @@ class music_player(commands.Cog):
         song = data['url']
         self.music_queue.pop(0)
         await self.ui(ctx)
-        self.vc.play(discord.FFmpegPCMAudio(song, executable= "ffmpeg.exe", **self.FFMPEG_OPTIONS), after=lambda e: asyncio.run_coroutine_threadsafe(self.play_music(ctx), self.bot.loop))
-    
+        self.vc.play(discord.FFmpegOpusAudio(song, executable= "ffmpeg.exe", **self.FFMPEG_OPTIONS), after=lambda e: asyncio.run_coroutine_threadsafe(self.play_music(ctx), self.bot.loop))
+
     def pause(self):
         if not self.is_playing:
             return False
