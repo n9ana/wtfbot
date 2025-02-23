@@ -154,10 +154,10 @@ class music_player(commands.Cog):
     def gen_playlist(self):
         if len(self.music_queue) <= 0:
             print("Unable to generate playlist, queue <= 0")
-        play_list = "**1. __"+ self.music_queue[0]['title'] + "__**\r\n"
+        play_list = "**1. __"+ self.music_queue[0]['title'] + "__**"
         count = 2
         if len(self.music_queue) > 1:
-            for it in self.music_queue:
+            for it in self.music_queue[1:]:
                 play_list = play_list + str(count) + ". " + it['title'] + "\r\n"
                 count = count + 1
         return play_list
