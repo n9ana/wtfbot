@@ -10,33 +10,36 @@ class music_player(commands.Cog):
     # async def on_interaction(self, interaction: discord.Interaction):
     #     print("1233")
     #     await interaction.respond(content="inin")
+    class channel():
+        def __init__(self):
+            self.is_playing = False
+            self.is_paused = False
+            self.music_queue = []
+            self.vc = None
+        
 
+        
     def __init__(self, bot):
         self.bot = bot
-    
-        #all the music related stuff
-        self.is_playing = False
-        self.is_paused = False
-
-        self.music_queue = []
+        
+        self.vc_list = {}
         self.YDL_OPTIONS = {'format': 'bestaudio/best'}
         # Debug use
         # self.YDL_OPTIONS = {'format': 'bestaudio/best',
         #                     'verbose': True}
         self.FFMPEG_OPTIONS = {'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
                                'options': '-vn -filter:a "volume=0.25"'}
-        self.vc = None
 
-    def append_request(self, link, channel):
+    def append_request(self, link, vc, channel: channel):
         try:
             with YoutubeDL(self.YDL_OPTIONS) as ydl:
                 data = ydl.extract_info(link, download=False)
             title = data["title"]
         except Exception:
             return False
-        self.music_queue.append({'source':link,
+        channel.music_queue.append({'source':link,
                                 'title':title,
-                                'vc': channel})
+                                'vc':vc})
         return True
     
     def do_yt_search(self, ctx, arg):
@@ -54,86 +57,91 @@ class music_player(commands.Cog):
         except:
             await self.send_error(ctx,"人？","Enter the voice channel first")
             return
-        
+        if self.vc_list.get(hash(voice_channel)) == None:
+            self.vc_list[hash(voice_channel)] = self.channel()
+
+        # perform yt search
         query = arg
         yt_url = ""
-        
-        # perform yt search
         if arg.startswith("https://"): 
             yt_url = query
         else:
             # Let user choose
             self.do_yt_search(ctx,query)
+
+        vc_ch = self.vc_list[hash(voice_channel)]
         # append to list
-        if not self.append_request(yt_url,voice_channel):
+        if not self.append_request(yt_url,voice_channel,vc_ch):
             await self.send_error(ctx,"Failed to add {yt_url}","")
             return
-        msg = "***" + self.music_queue[-1]['title'] + "***" + " was added to the queue"
+        msg = "***" + vc_ch.music_queue[-1]['title'] + "***" + " was added to the queue"
         await self.send_success(ctx,"Query success~",msg)
-        if self.is_playing:
+        if vc_ch.is_playing:
             return
             # play
-        await self.play_music(ctx)
+        await self.play_music(ctx,vc_ch)
         
-    async def play_music(self, ctx):
-        if len(self.music_queue) <= 0:
-            self.is_playing = False
+    async def play_music(self, ctx, channel:channel):
+        if len(channel.music_queue) <= 0:
+            channel.is_playing = False
             return
-        self.is_playing = True
-        music = self.music_queue[0]
+        channel.is_playing = True
+        music = channel.music_queue[0]
         # join vc
-        if self.vc == None or not self.vc.is_connected():
-            self.vc = await music['vc'].connect()
-            if self.vc == None: # Failed
+        if channel.vc == None or not channel.vc.is_connected():
+            channel.vc = await music['vc'].connect()
+            if channel.vc == None: # Failed
                 await self.send_error(ctx,"Failed to join vc","")
                 return 
         else:
-            await self.vc.move_to(music['vc'])
+            await channel.vc.move_to(music['vc'])
 
         # Display play list
-        await self.send_info(ctx,"Playlist",self.gen_playlist())
-
+        await self.send_info(ctx,"Playlist",self.gen_playlist(channel))
         # Play music
         loop = asyncio.get_event_loop()
         with YoutubeDL(self.YDL_OPTIONS) as ydl:
             data = ydl.extract_info(music['source'], download=False)
         song = data['url']
-        self.music_queue.pop(0)
+        channel.music_queue.pop(0)
         await self.ui(ctx)
-        self.vc.play(discord.FFmpegOpusAudio(song, executable= "ffmpeg.exe", **self.FFMPEG_OPTIONS), after=lambda e: asyncio.run_coroutine_threadsafe(self.play_music(ctx), self.bot.loop))
+        channel.vc.play(discord.FFmpegOpusAudio(song, executable= "ffmpeg.exe", **self.FFMPEG_OPTIONS), after=lambda e: asyncio.run_coroutine_threadsafe(self.play_music(ctx,channel), self.bot.loop))
 
-    def pause(self):
-        if not self.is_playing:
+    def pause(self,vc_ch:channel):
+        if not vc_ch.is_playing:
             return False
-        self.is_playing = False
-        self.is_paused = True
-        self.vc.pause()
+        vc_ch.is_playing = False
+        vc_ch.is_paused = True
+        vc_ch.vc.pause()
         return True
 
-    def resume(self):
-        if not self.is_paused:
+    def resume(self,vc_ch:channel):
+        if not vc_ch.is_paused:
             return False
-        self.is_playing = True
-        self.is_paused = False
-        self.vc.resume()
+        vc_ch.is_playing = True
+        vc_ch.is_paused = False
+        vc_ch.vc.resume()
         return True
     
-    async def next(self,ctx):
-        if self.vc != None and self.vc:
-            self.vc.stop()
+    async def next(self,interaction):
+        vc_ch = self.vc_list[hash(interaction.user.voice.channel)]
+        if vc_ch.vc != None and vc_ch.vc:
+            vc_ch.vc.stop()
             #try to play next in the queue if it exists
-            await self.play_music(ctx)
+            await self.play_music(interaction)
+
     # UI
     async def resume_button_cb(self, interaction: discord.Interaction):
-        if self.is_paused:
-            self.resume()
+        vc_ch = self.vc_list[hash(interaction.user.voice.channel)]
+        if vc_ch.is_paused:
+            self.resume(vc_ch)
             await interaction.response.edit_message(content = "Resumed")
         else:
-            self.pause()
+            self.pause(vc_ch)
             await interaction.response.edit_message(content = "Paused")
 
     async def clear_button_cb(self, interaction: discord.Interaction):
-        self.music_queue = []
+        self.vc_list[hash(interaction.user.voice.channel)].music_queue = []
         await interaction.response.edit_message(content = "Playlist cleared")
 
     async def next_button_cb(self, interaction: discord.Interaction):
@@ -164,13 +172,13 @@ class music_player(commands.Cog):
         await ctx.send("Control Panel", view=view)
     
 
-    def gen_playlist(self):
-        if len(self.music_queue) <= 0:
+    def gen_playlist(self, channel:channel):
+        if len(channel.music_queue) <= 0:
             print("Unable to generate playlist, queue <= 0")
-        play_list = "**1. __"+ self.music_queue[0]['title'] + "__**"
+        play_list = "**1. __"+ channel.music_queue[0]['title'] + "__**"
         count = 2
-        if len(self.music_queue) > 1:
-            for it in self.music_queue[1:]:
+        if len(channel.music_queue) > 1:
+            for it in channel.music_queue[1:]:
                 play_list = play_list + str(count) + ". " + it['title'] + "\r\n"
                 count = count + 1
         return play_list
